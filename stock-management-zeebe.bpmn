@@ -1,0 +1,310 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+                  xmlns:zeebe="http://camunda.org/schema/zeebe/1.0"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  id="Definitions_StockManagement"
+                  targetNamespace="http://bpmn.io/schema/bpmn"
+                  exporter="Camunda Modeler"
+                  exporterVersion="5.0.0">
+
+  <bpmn:process id="StockReplenishmentWorkflow" isExecutable="true" name="Stock Management Process (Interactive)">
+
+    <!-- ====================== Start Event ====================== -->
+    <bpmn:startEvent id="StartEvent_1" name="Product out of stock detected">
+      <bpmn:outgoing>Flow_Start</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <!-- ====================== Step 1 – Data & Analytics ====================== -->
+    <bpmn:serviceTask id="Task_ComputeQuantity" name="Compute Optimal Replenishment Quantity">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="compute-replenishment-quantity" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_Start</bpmn:incoming>
+      <bpmn:outgoing>Flow_ToMerch</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <!-- ====================== Step 2 – Merchandising ====================== -->
+    <bpmn:serviceTask id="Task_CreateRequest" name="Create Replenishment Request">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="create-replenishment-request" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_ToMerch</bpmn:incoming>
+      <bpmn:outgoing>Flow_Verify</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Task_VerifyStock" name="Verify Stock Level">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="verify-stock" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_Verify</bpmn:incoming>
+      <bpmn:outgoing>Flow_ToStockGateway</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <!-- Stock Verification Gateway -->
+    <bpmn:exclusiveGateway id="Gateway_StockOK" name="Stock verification passed?">
+      <bpmn:incoming>Flow_ToStockGateway</bpmn:incoming>
+      <bpmn:outgoing>Flow_StockYes</bpmn:outgoing>
+      <bpmn:outgoing>Flow_StockNo</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:endEvent id="End_VerificationFailed" name="Verification failed – process terminated">
+      <bpmn:incoming>Flow_StockNo</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <!-- ====================== Step 3 – Finance & Accounting ====================== -->
+    <bpmn:serviceTask id="Task_FinanceAnalyze" name="Analyze Replenishment Request">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="analyze-replenishment" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_StockYes</bpmn:incoming>
+      <bpmn:outgoing>Flow_ToFinanceGateway</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <!-- Finance Approval Gateway -->
+    <bpmn:exclusiveGateway id="Gateway_FinanceApproved" name="Finance approved?">
+      <bpmn:incoming>Flow_ToFinanceGateway</bpmn:incoming>
+      <bpmn:outgoing>Flow_FinanceYes</bpmn:outgoing>
+      <bpmn:outgoing>Flow_FinanceNo</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:endEvent id="End_FinanceRefused" name="Replenishment refused">
+      <bpmn:incoming>Flow_FinanceNo</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <!-- ====================== Step 4 – Logistics & Procurement ====================== -->
+    <bpmn:serviceTask id="Task_LogisticsProcess" name="Process Replenishment Request">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="process-replenishment" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_FinanceYes</bpmn:incoming>
+      <bpmn:outgoing>Flow_ToDeliveryCheck</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Task_CheckDelivery" name="Receive and Check Delivery">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="check-delivery" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_ToDeliveryCheck</bpmn:incoming>
+      <bpmn:outgoing>Flow_ToDeliveryGateway</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <!-- Delivery Conformity Gateway -->
+    <bpmn:exclusiveGateway id="Gateway_DeliveryOK" name="Delivery conforming?">
+      <bpmn:incoming>Flow_ToDeliveryGateway</bpmn:incoming>
+      <bpmn:outgoing>Flow_DeliveryYes</bpmn:outgoing>
+      <bpmn:outgoing>Flow_DeliveryNo</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:serviceTask id="Task_HandleReturn" name="Process Return">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="handle-return" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_DeliveryNo</bpmn:incoming>
+      <bpmn:outgoing>Flow_ToReturnEnd</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:endEvent id="End_ReturnCompleted" name="Non-compliant delivery returned">
+      <bpmn:incoming>Flow_ToReturnEnd</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <!-- ====================== Step 5 – IT ====================== -->
+    <bpmn:serviceTask id="Task_ITUpdate" name="Update Stock in Systems">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="update-stock-systems" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_DeliveryYes</bpmn:incoming>
+      <bpmn:outgoing>Flow_ToSuccess</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <!-- Success End -->
+    <bpmn:endEvent id="End_Success" name="Stock successfully replenished">
+      <bpmn:incoming>Flow_ToSuccess</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <!-- ====================== Sequence Flows ====================== -->
+    <bpmn:sequenceFlow id="Flow_Start" sourceRef="StartEvent_1" targetRef="Task_ComputeQuantity" />
+    <bpmn:sequenceFlow id="Flow_ToMerch" sourceRef="Task_ComputeQuantity" targetRef="Task_CreateRequest" />
+    <bpmn:sequenceFlow id="Flow_Verify" sourceRef="Task_CreateRequest" targetRef="Task_VerifyStock" />
+    <bpmn:sequenceFlow id="Flow_ToStockGateway" sourceRef="Task_VerifyStock" targetRef="Gateway_StockOK" />
+
+    <bpmn:sequenceFlow id="Flow_StockYes" name="Yes" sourceRef="Gateway_StockOK" targetRef="Task_FinanceAnalyze">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">=stockVerified = true</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_StockNo" name="No" sourceRef="Gateway_StockOK" targetRef="End_VerificationFailed">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">=stockVerified = false</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+
+    <bpmn:sequenceFlow id="Flow_ToFinanceGateway" sourceRef="Task_FinanceAnalyze" targetRef="Gateway_FinanceApproved" />
+
+    <bpmn:sequenceFlow id="Flow_FinanceYes" name="Yes" sourceRef="Gateway_FinanceApproved" targetRef="Task_LogisticsProcess">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">=financeApproved = true</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_FinanceNo" name="No" sourceRef="Gateway_FinanceApproved" targetRef="End_FinanceRefused">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">=financeApproved = false</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+
+    <bpmn:sequenceFlow id="Flow_ToDeliveryCheck" sourceRef="Task_LogisticsProcess" targetRef="Task_CheckDelivery" />
+    <bpmn:sequenceFlow id="Flow_ToDeliveryGateway" sourceRef="Task_CheckDelivery" targetRef="Gateway_DeliveryOK" />
+
+    <bpmn:sequenceFlow id="Flow_DeliveryYes" name="Yes" sourceRef="Gateway_DeliveryOK" targetRef="Task_ITUpdate">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">=deliveryConforming = true</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_DeliveryNo" name="No" sourceRef="Gateway_DeliveryOK" targetRef="Task_HandleReturn">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">=deliveryConforming = false</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+
+    <bpmn:sequenceFlow id="Flow_ToSuccess" sourceRef="Task_ITUpdate" targetRef="End_Success" />
+    <bpmn:sequenceFlow id="Flow_ToReturnEnd" sourceRef="Task_HandleReturn" targetRef="End_ReturnCompleted" />
+
+  </bpmn:process>
+
+  <!-- ====================== BPMN Diagram Layout ====================== -->
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="StockReplenishmentWorkflow">
+      
+      <bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1">
+        <dc:Bounds x="152" y="232" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      
+      <bpmndi:BPMNShape id="Task_ComputeQuantity_di" bpmnElement="Task_ComputeQuantity">
+        <dc:Bounds x="240" y="210" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      
+      <bpmndi:BPMNShape id="Task_CreateRequest_di" bpmnElement="Task_CreateRequest">
+        <dc:Bounds x="390" y="210" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      
+      <bpmndi:BPMNShape id="Task_VerifyStock_di" bpmnElement="Task_VerifyStock">
+        <dc:Bounds x="540" y="210" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      
+      <bpmndi:BPMNShape id="Gateway_StockOK_di" bpmnElement="Gateway_StockOK" isMarkerVisible="true">
+        <dc:Bounds x="695" y="225" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      
+      <bpmndi:BPMNShape id="End_VerificationFailed_di" bpmnElement="End_VerificationFailed">
+        <dc:Bounds x="702" y="352" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      
+      <bpmndi:BPMNShape id="Task_FinanceAnalyze_di" bpmnElement="Task_FinanceAnalyze">
+        <dc:Bounds x="800" y="210" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      
+      <bpmndi:BPMNShape id="Gateway_FinanceApproved_di" bpmnElement="Gateway_FinanceApproved" isMarkerVisible="true">
+        <dc:Bounds x="955" y="225" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      
+      <bpmndi:BPMNShape id="End_FinanceRefused_di" bpmnElement="End_FinanceRefused">
+        <dc:Bounds x="962" y="352" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      
+      <bpmndi:BPMNShape id="Task_LogisticsProcess_di" bpmnElement="Task_LogisticsProcess">
+        <dc:Bounds x="1060" y="210" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      
+      <bpmndi:BPMNShape id="Task_CheckDelivery_di" bpmnElement="Task_CheckDelivery">
+        <dc:Bounds x="1210" y="210" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      
+      <bpmndi:BPMNShape id="Gateway_DeliveryOK_di" bpmnElement="Gateway_DeliveryOK" isMarkerVisible="true">
+        <dc:Bounds x="1365" y="225" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      
+      <bpmndi:BPMNShape id="Task_HandleReturn_di" bpmnElement="Task_HandleReturn">
+        <dc:Bounds x="1340" y="330" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      
+      <bpmndi:BPMNShape id="End_ReturnCompleted_di" bpmnElement="End_ReturnCompleted">
+        <dc:Bounds x="1372" y="452" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      
+      <bpmndi:BPMNShape id="Task_ITUpdate_di" bpmnElement="Task_ITUpdate">
+        <dc:Bounds x="1470" y="210" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      
+      <bpmndi:BPMNShape id="End_Success_di" bpmnElement="End_Success">
+        <dc:Bounds x="1622" y="232" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      
+      <!-- Edges -->
+      <bpmndi:BPMNEdge id="Flow_Start_di" bpmnElement="Flow_Start">
+        <di:waypoint x="188" y="250" />
+        <di:waypoint x="240" y="250" />
+      </bpmndi:BPMNEdge>
+      
+      <bpmndi:BPMNEdge id="Flow_ToMerch_di" bpmnElement="Flow_ToMerch">
+        <di:waypoint x="340" y="250" />
+        <di:waypoint x="390" y="250" />
+      </bpmndi:BPMNEdge>
+      
+      <bpmndi:BPMNEdge id="Flow_Verify_di" bpmnElement="Flow_Verify">
+        <di:waypoint x="490" y="250" />
+        <di:waypoint x="540" y="250" />
+      </bpmndi:BPMNEdge>
+      
+      <bpmndi:BPMNEdge id="Flow_ToStockGateway_di" bpmnElement="Flow_ToStockGateway">
+        <di:waypoint x="640" y="250" />
+        <di:waypoint x="695" y="250" />
+      </bpmndi:BPMNEdge>
+      
+      <bpmndi:BPMNEdge id="Flow_StockYes_di" bpmnElement="Flow_StockYes">
+        <di:waypoint x="745" y="250" />
+        <di:waypoint x="800" y="250" />
+      </bpmndi:BPMNEdge>
+      
+      <bpmndi:BPMNEdge id="Flow_StockNo_di" bpmnElement="Flow_StockNo">
+        <di:waypoint x="720" y="275" />
+        <di:waypoint x="720" y="352" />
+      </bpmndi:BPMNEdge>
+      
+      <bpmndi:BPMNEdge id="Flow_ToFinanceGateway_di" bpmnElement="Flow_ToFinanceGateway">
+        <di:waypoint x="900" y="250" />
+        <di:waypoint x="955" y="250" />
+      </bpmndi:BPMNEdge>
+      
+      <bpmndi:BPMNEdge id="Flow_FinanceYes_di" bpmnElement="Flow_FinanceYes">
+        <di:waypoint x="1005" y="250" />
+        <di:waypoint x="1060" y="250" />
+      </bpmndi:BPMNEdge>
+      
+      <bpmndi:BPMNEdge id="Flow_FinanceNo_di" bpmnElement="Flow_FinanceNo">
+        <di:waypoint x="980" y="275" />
+        <di:waypoint x="980" y="352" />
+      </bpmndi:BPMNEdge>
+      
+      <bpmndi:BPMNEdge id="Flow_ToDeliveryCheck_di" bpmnElement="Flow_ToDeliveryCheck">
+        <di:waypoint x="1160" y="250" />
+        <di:waypoint x="1210" y="250" />
+      </bpmndi:BPMNEdge>
+      
+      <bpmndi:BPMNEdge id="Flow_ToDeliveryGateway_di" bpmnElement="Flow_ToDeliveryGateway">
+        <di:waypoint x="1310" y="250" />
+        <di:waypoint x="1365" y="250" />
+      </bpmndi:BPMNEdge>
+      
+      <bpmndi:BPMNEdge id="Flow_DeliveryYes_di" bpmnElement="Flow_DeliveryYes">
+        <di:waypoint x="1415" y="250" />
+        <di:waypoint x="1470" y="250" />
+      </bpmndi:BPMNEdge>
+      
+      <bpmndi:BPMNEdge id="Flow_DeliveryNo_di" bpmnElement="Flow_DeliveryNo">
+        <di:waypoint x="1390" y="275" />
+        <di:waypoint x="1390" y="330" />
+      </bpmndi:BPMNEdge>
+      
+      <bpmndi:BPMNEdge id="Flow_ToSuccess_di" bpmnElement="Flow_ToSuccess">
+        <di:waypoint x="1570" y="250" />
+        <di:waypoint x="1622" y="250" />
+      </bpmndi:BPMNEdge>
+      
+      <bpmndi:BPMNEdge id="Flow_ToReturnEnd_di" bpmnElement="Flow_ToReturnEnd">
+        <di:waypoint x="1390" y="410" />
+        <di:waypoint x="1390" y="452" />
+      </bpmndi:BPMNEdge>
+      
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>
