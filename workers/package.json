@@ -1,0 +1,36 @@
+{
+  "name": "product-promotion-workers",
+  "version": "1.0.0",
+  "description": "Root package for Product Promotion Workflow - All Department Workers",
+  "private": true,
+  "scripts": {
+    "install:all": "npm run install:data && npm run install:commercial && npm run install:finance && npm run install:marketing && npm run install:it",
+    "install:data": "cd data-analysis && npm install",
+    "install:commercial": "cd commercial && npm install",
+    "install:finance": "cd finance && npm install",
+    "install:marketing": "cd marketing && npm install",
+    "install:it": "cd it && npm install",
+    "start:data": "cd data-analysis && npm start",
+    "start:commercial": "cd commercial && npm start",
+    "start:finance": "cd finance && npm start",
+    "start:marketing": "cd marketing && npm start",
+    "start:it": "cd it && npm start",
+    "start:all": "concurrently \"npm:start:data\" \"npm:start:commercial\" \"npm:start:finance\" \"npm:start:marketing\" \"npm:start:it\"",
+    "interactive:data": "cd data-analysis && node worker-interactive.js",
+    "interactive:commercial": "cd commercial && node worker-interactive.js",
+    "interactive:finance": "cd finance && node worker-interactive.js",
+    "interactive:marketing": "cd marketing && node worker-interactive.js",
+    "interactive:it": "cd it && node worker-interactive.js",
+    "deploy": "node scripts/deploy-process.js",
+    "start": "node scripts/start-process.js"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "author": "Student Project Team",
+  "license": "MIT",
+  "dependencies": {
+    "@camunda8/sdk": "^8.6.0",
+    "dotenv": "^17.2.3"
+  }
+}
