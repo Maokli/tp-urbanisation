@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Logistics & Warehouse Department | Stock Replenishment System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    @keyframes slideOut { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
+    @keyframes pulse-border { 0%, 100% { box-shadow: 0 0 0 0 rgba(147, 51, 234, 0.4); } 50% { box-shadow: 0 0 0 8px rgba(147, 51, 234, 0); } }
+    .notification-enter { animation: slideIn 0.3s ease-out forwards; }
+    .notification-exit { animation: slideOut 0.3s ease-in forwards; }
+    .task-new { animation: pulse-border 1s ease-in-out 3; }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+  <!-- Header -->
+  <header class="bg-purple-600 text-white shadow-lg">
+    <div class="container mx-auto px-4 py-4">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center space-x-4">
+          <span class="text-3xl">🚚</span>
+          <div>
+            <h1 class="text-2xl font-bold">Logistics & Warehouse Department</h1>
+            <p class="text-sm text-white/80">Stock Replenishment Workflow</p>
+          </div>
+        </div>
+        <div class="flex items-center space-x-4">
+          <div id="connection-status" class="flex items-center space-x-2">
+            <span id="status-dot" class="w-3 h-3 bg-green-400 rounded-full animate-pulse"></span>
+            <span id="status-text" class="text-sm">Connected</span>
+          </div>
+          <div class="bg-white/10 px-3 py-1 rounded-full text-sm">
+            <span id="task-count">0</span> pending task(s)
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Notification Container -->
+  <div id="notification-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+  <!-- Main Content -->
+  <main class="container mx-auto px-4 py-6">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <!-- Task List -->
+      <div>
+        <h2 class="text-xl font-semibold text-gray-800 mb-4">📋 Pending Logistics Tasks</h2>
+        <div id="task-list" class="space-y-4">
+          <div id="no-tasks" class="bg-white rounded-lg shadow p-8 text-center text-gray-500">
+            <span class="text-4xl mb-4 block">⏳</span>
+            <p>No pending tasks. Waiting for new tasks from Zeebe...</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Task Forms -->
+      <div>
+        <h2 class="text-xl font-semibold text-gray-800 mb-4">📝 Task Details</h2>
+        <div id="form-container" class="bg-white rounded-lg shadow-lg p-6">
+          <div id="no-task-selected" class="text-center text-gray-500 py-8">
+            <span class="text-4xl mb-4 block">👆</span>
+            <p>Select a task from the list to process it</p>
+          </div>
+          
+          <!-- Process Replenishment Form -->
+          <form id="replenishment-form" class="hidden space-y-6">
+            <input type="hidden" id="replenishmentJobKey" name="jobKey">
+            
+            <div class="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-4">
+              <p class="text-sm text-purple-600 font-medium">📦 Processing Order:</p>
+              <p id="replenishment-job-key" class="text-lg font-mono text-purple-800"></p>
+            </div>
+
+            <div class="bg-gray-50 rounded-lg p-4 space-y-2">
+              <h3 class="font-semibold text-gray-700 mb-3">📦 Order Details</h3>
+              <div class="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span class="text-gray-500">Product:</span>
+                  <span id="replenishment-product" class="ml-2 font-medium">-</span>
+                </div>
+                <div>
+                  <span class="text-gray-500">Recommended Qty:</span>
+                  <span id="replenishment-qty" class="ml-2 font-medium">-</span>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Supplier ID</label>
+              <input type="text" name="supplierId" value="SUP-001" required
+                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Order Quantity</label>
+              <input type="number" name="orderQuantity" id="replenishment-order-qty" value="100" min="1" required
+                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+            </div>
+
+            <div class="flex items-center space-x-3">
+              <input type="checkbox" name="expedited" value="true" id="expedited" class="w-5 h-5 text-purple-600 rounded">
+              <label for="expedited" class="text-sm font-medium text-gray-700">⚡ Expedited Shipping</label>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Notes</label>
+              <textarea name="notes" rows="2" placeholder="Optional order notes..."
+                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"></textarea>
+            </div>
+
+            <button type="submit" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors">
+              📦 Place Order
+            </button>
+          </form>
+
+          <!-- Check Delivery Form -->
+          <form id="delivery-form" class="hidden space-y-6">
+            <input type="hidden" id="deliveryJobKey" name="jobKey">
+            
+            <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+              <p class="text-sm text-green-600 font-medium">🚚 Checking Delivery:</p>
+              <p id="delivery-job-key" class="text-lg font-mono text-green-800"></p>
+            </div>
+
+            <div class="bg-gray-50 rounded-lg p-4 space-y-2">
+              <h3 class="font-semibold text-gray-700 mb-3">📦 Delivery Details</h3>
+              <div class="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span class="text-gray-500">Order ID:</span>
+                  <span id="delivery-order-id" class="ml-2 font-medium">-</span>
+                </div>
+                <div>
+                  <span class="text-gray-500">Expected Qty:</span>
+                  <span id="delivery-expected-qty" class="ml-2 font-medium">-</span>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Delivery Status</label>
+              <select name="deliveryStatus" required
+                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500">
+                <option value="delivered">✅ Delivered</option>
+                <option value="partial">⚠️ Partial Delivery</option>
+                <option value="delayed">🕐 Delayed</option>
+                <option value="damaged">❌ Damaged</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Quantity Received</label>
+              <input type="number" name="quantityReceived" id="delivery-received-qty" value="100" min="0" required
+                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500">
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Damage Report (if any)</label>
+              <textarea name="damageReport" rows="2" placeholder="Describe any damage..."
+                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"></textarea>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Notes</label>
+              <textarea name="notes" rows="2" placeholder="Optional delivery notes..."
+                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"></textarea>
+            </div>
+
+            <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors">
+              ✅ Confirm Delivery Status
+            </button>
+          </form>
+
+          <!-- Handle Return Form -->
+          <form id="return-form" class="hidden space-y-6">
+            <input type="hidden" id="returnJobKey" name="jobKey">
+            
+            <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+              <p class="text-sm text-red-600 font-medium">↩️ Processing Return:</p>
+              <p id="return-job-key" class="text-lg font-mono text-red-800"></p>
+            </div>
+
+            <div class="bg-gray-50 rounded-lg p-4 space-y-2">
+              <h3 class="font-semibold text-gray-700 mb-3">↩️ Return Details</h3>
+              <div class="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span class="text-gray-500">Order ID:</span>
+                  <span id="return-order-id" class="ml-2 font-medium">-</span>
+                </div>
+                <div>
+                  <span class="text-gray-500">Damage Report:</span>
+                  <span id="return-damage" class="ml-2 font-medium">-</span>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Return Quantity</label>
+              <input type="number" name="returnQuantity" id="return-qty" value="0" min="0" required
+                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500">
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Return Reason</label>
+              <select name="returnReason" required
+                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                <option value="damaged">Damaged goods</option>
+                <option value="wrong_item">Wrong item received</option>
+                <option value="quality">Quality issues</option>
+                <option value="excess">Excess quantity</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+
+            <div class="flex items-center space-x-3">
+              <input type="checkbox" name="replacementRequested" value="true" id="replacement" class="w-5 h-5 text-red-600 rounded" checked>
+              <label for="replacement" class="text-sm font-medium text-gray-700">🔄 Request Replacement</label>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Notes</label>
+              <textarea name="notes" rows="2" placeholder="Optional return notes..."
+                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"></textarea>
+            </div>
+
+            <button type="submit" class="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors">
+              ↩️ Process Return
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const socket = io();
+    const tasks = new Map();
+    let selectedJobKey = null;
+
+    const taskList = document.getElementById('task-list');
+    const noTasks = document.getElementById('no-tasks');
+    const noTaskSelected = document.getElementById('no-task-selected');
+    const replenishmentForm = document.getElementById('replenishment-form');
+    const deliveryForm = document.getElementById('delivery-form');
+    const returnForm = document.getElementById('return-form');
+    const taskCount = document.getElementById('task-count');
+    const notificationContainer = document.getElementById('notification-container');
+
+    function updateTaskCount() {
+      taskCount.textContent = tasks.size;
+      noTasks.classList.toggle('hidden', tasks.size > 0);
+    }
+
+    function showNotification(message, type = 'info') {
+      const colors = { success: 'bg-green-500', error: 'bg-red-500', warning: 'bg-yellow-500', info: 'bg-purple-500' };
+      const icons = { success: '✅', error: '❌', warning: '⚠️', info: '📥' };
+      
+      const notification = document.createElement('div');
+      notification.className = 'notification-enter ' + colors[type] + ' text-white px-4 py-3 rounded-lg shadow-lg flex items-center space-x-2 min-w-[300px]';
+      notification.innerHTML = 
+        '<span class="text-xl">' + icons[type] + '</span>' +
+        '<span class="flex-1">' + message + '</span>' +
+        '<button onclick="this.parentElement.remove()" class="text-white/80 hover:text-white">✕</button>';
+      
+      notificationContainer.appendChild(notification);
+      setTimeout(() => {
+        notification.classList.replace('notification-enter', 'notification-exit');
+        setTimeout(() => notification.remove(), 300);
+      }, 5000);
+    }
+
+    function getTaskColor(taskType) {
+      switch(taskType) {
+        case 'process-replenishment': return 'purple';
+        case 'check-delivery': return 'green';
+        case 'handle-return': return 'red';
+        default: return 'gray';
+      }
+    }
+
+    function getTaskIcon(taskType) {
+      switch(taskType) {
+        case 'process-replenishment': return '📦';
+        case 'check-delivery': return '🚚';
+        case 'handle-return': return '↩️';
+        default: return '📋';
+      }
+    }
+
+    function getTaskTitle(taskType) {
+      switch(taskType) {
+        case 'process-replenishment': return 'Process Replenishment Order';
+        case 'check-delivery': return 'Check Delivery Status';
+        case 'handle-return': return 'Handle Return';
+        default: return 'Unknown Task';
+      }
+    }
+
+    function renderTaskCard(task) {
+      const card = document.createElement('div');
+      card.id = 'task-' + task.jobKey;
+      
+      const color = getTaskColor(task.taskType);
+      const icon = getTaskIcon(task.taskType);
+      const title = getTaskTitle(task.taskType);
+      
+      card.className = 'bg-white rounded-lg shadow-md border-l-4 border-' + color + '-500 p-4 task-new cursor-pointer hover:shadow-lg transition-shadow';
+      
+      const vars = task.variables || {};
+      const productName = vars.productName || vars.productId || 'Unknown';
+      const orderId = vars.orderId || '-';
+      
+      let detailsHtml = '';
+      if (task.taskType === 'process-replenishment') {
+        detailsHtml = 'Product: ' + productName + ' | Qty: ' + (vars.recommendedQuantity || '-') + ' units';
+      } else if (task.taskType === 'check-delivery') {
+        detailsHtml = 'Order: ' + orderId + ' | Expected: ' + (vars.orderQuantity || '-') + ' units';
+      } else if (task.taskType === 'handle-return') {
+        detailsHtml = 'Order: ' + orderId + ' | Damage reported';
+      }
+      
+      card.innerHTML = 
+        '<div class="flex items-start justify-between">' +
+          '<div>' +
+            '<div class="flex items-center space-x-2 mb-2">' +
+              '<span class="bg-' + color + '-100 text-' + color + '-800 text-xs font-medium px-2.5 py-0.5 rounded">' + icon + ' ' + task.taskType + '</span>' +
+            '</div>' +
+            '<h3 class="font-semibold text-gray-800">' + title + '</h3>' +
+            '<p class="text-sm text-gray-500 mt-1">' + detailsHtml + '</p>' +
+          '</div>' +
+          '<span class="text-xs text-gray-400">' + new Date().toLocaleTimeString() + '</span>' +
+        '</div>' +
+        '<div class="mt-4">' +
+          '<button data-job-key="' + task.jobKey + '" class="select-task-btn w-full bg-' + color + '-500 hover:bg-' + color + '-600 text-white text-sm font-medium px-4 py-2 rounded transition-colors">' +
+            'Work on this task' +
+          '</button>' +
+        '</div>';
+      return card;
+    }
+
+    // Event delegation for task buttons
+    taskList.addEventListener('click', function(e) {
+      const btn = e.target.closest('.select-task-btn');
+      if (btn) {
+        selectTask(btn.dataset.jobKey);
+      }
+    });
+
+    function hideAllForms() {
+      replenishmentForm.classList.add('hidden');
+      deliveryForm.classList.add('hidden');
+      returnForm.classList.add('hidden');
+      noTaskSelected.classList.add('hidden');
+    }
+
+    function selectTask(jobKey) {
+      selectedJobKey = jobKey;
+      const task = tasks.get(jobKey);
+      const vars = task && task.variables ? task.variables : {};
+      
+      hideAllForms();
+      
+      if (task.taskType === 'process-replenishment') {
+        document.getElementById('replenishmentJobKey').value = jobKey;
+        document.getElementById('replenishment-job-key').textContent = '#' + jobKey.substring(0, 16) + '...';
+        document.getElementById('replenishment-product').textContent = vars.productName || vars.productId || 'N/A';
+        document.getElementById('replenishment-qty').textContent = (vars.recommendedQuantity || '-') + ' units';
+        document.getElementById('replenishment-order-qty').value = vars.recommendedQuantity || 100;
+        replenishmentForm.classList.remove('hidden');
+      } else if (task.taskType === 'check-delivery') {
+        document.getElementById('deliveryJobKey').value = jobKey;
+        document.getElementById('delivery-job-key').textContent = '#' + jobKey.substring(0, 16) + '...';
+        document.getElementById('delivery-order-id').textContent = vars.orderId || 'N/A';
+        document.getElementById('delivery-expected-qty').textContent = (vars.orderQuantity || '-') + ' units';
+        document.getElementById('delivery-received-qty').value = vars.orderQuantity || 100;
+        deliveryForm.classList.remove('hidden');
+      } else if (task.taskType === 'handle-return') {
+        document.getElementById('returnJobKey').value = jobKey;
+        document.getElementById('return-job-key').textContent = '#' + jobKey.substring(0, 16) + '...';
+        document.getElementById('return-order-id').textContent = vars.orderId || 'N/A';
+        document.getElementById('return-damage').textContent = vars.damageReport || 'See details';
+        document.getElementById('return-qty').value = vars.quantityReceived || 0;
+        returnForm.classList.remove('hidden');
+      }
+      
+      // Highlight selected task
+      document.querySelectorAll('[id^="task-"]').forEach(el => {
+        el.classList.remove('ring-2', 'ring-purple-500', 'ring-green-500', 'ring-red-500');
+      });
+      const color = getTaskColor(task.taskType);
+      var taskEl = document.getElementById('task-' + jobKey);
+      if (taskEl) taskEl.classList.add('ring-2', 'ring-' + color + '-500');
+    }
+
+    // Socket events
+    socket.on('connect', () => {
+      document.getElementById('status-dot').classList.add('bg-green-400');
+      document.getElementById('status-text').textContent = 'Connected';
+    });
+
+    socket.on('disconnect', () => {
+      document.getElementById('status-dot').classList.remove('bg-green-400');
+      document.getElementById('status-dot').classList.add('bg-red-400');
+      document.getElementById('status-text').textContent = 'Disconnected';
+    });
+
+    socket.on('initial-tasks', (initialTasks) => {
+      initialTasks.forEach(task => {
+        if (!tasks.has(task.jobKey)) {
+          tasks.set(task.jobKey, task);
+          taskList.appendChild(renderTaskCard(task));
+        }
+      });
+      updateTaskCount();
+    });
+
+    socket.on('new-task', (task) => {
+      if (tasks.has(task.jobKey)) {
+        console.log('Task already exists, skipping:', task.jobKey);
+        return;
+      }
+      tasks.set(task.jobKey, task);
+      taskList.insertBefore(renderTaskCard(task), taskList.firstChild);
+      updateTaskCount();
+      showNotification('New logistics task received: ' + task.taskType, 'info');
+    });
+
+    socket.on('task-completed', (data) => {
+      tasks.delete(data.jobKey);
+      var taskEl = document.getElementById('task-' + data.jobKey);
+      if (taskEl) taskEl.remove();
+      updateTaskCount();
+      
+      if (selectedJobKey === data.jobKey) {
+        hideAllForms();
+        noTaskSelected.classList.remove('hidden');
+        selectedJobKey = null;
+        replenishmentForm.reset();
+        deliveryForm.reset();
+        returnForm.reset();
+      }
+    });
+
+    // Form submissions
+    replenishmentForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const data = Object.fromEntries(new FormData(replenishmentForm).entries());
+
+      try {
+        const response = await fetch('/complete-replenishment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        const result = await response.json();
+        if (result.success) {
+          showNotification('Order placed successfully! 📦', 'success');
+          replenishmentForm.reset();
+          hideAllForms();
+          noTaskSelected.classList.remove('hidden');
+        } else {
+          showNotification(result.error || 'Failed to place order', 'error');
+        }
+      } catch (error) {
+        showNotification('Error: ' + error.message, 'error');
+      }
+    });
+
+    deliveryForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const data = Object.fromEntries(new FormData(deliveryForm).entries());
+
+      try {
+        const response = await fetch('/complete-delivery', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        const result = await response.json();
+        if (result.success) {
+          showNotification('Delivery confirmed! 🚚', 'success');
+          deliveryForm.reset();
+          hideAllForms();
+          noTaskSelected.classList.remove('hidden');
+        } else {
+          showNotification(result.error || 'Failed to confirm delivery', 'error');
+        }
+      } catch (error) {
+        showNotification('Error: ' + error.message, 'error');
+      }
+    });
+
+    returnForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const data = Object.fromEntries(new FormData(returnForm).entries());
+
+      try {
+        const response = await fetch('/complete-return', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        const result = await response.json();
+        if (result.success) {
+          showNotification('Return processed! ↩️', 'success');
+          returnForm.reset();
+          hideAllForms();
+          noTaskSelected.classList.remove('hidden');
+        } else {
+          showNotification(result.error || 'Failed to process return', 'error');
+        }
+      } catch (error) {
+        showNotification('Error: ' + error.message, 'error');
+      }
+    });
+  </script>
+</body>
+</html>

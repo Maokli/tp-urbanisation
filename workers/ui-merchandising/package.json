@@ -1,0 +1,17 @@
+{
+  "name": "ui-merchandising",
+  "version": "1.0.0",
+  "description": "Merchandising Department Web UI for Stock Replenishment Workflow",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "@camunda8/sdk": "^8.6.0",
+    "dotenv": "^16.3.1",
+    "ejs": "^3.1.9",
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2"
+  }
+}

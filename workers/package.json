@@ -1,28 +1,25 @@
 {
   "name": "product-promotion-workers",
   "version": "1.0.0",
-  "description": "Root package for Product Promotion Workflow - All Department Workers",
+  "description": "Root package for Product Promotion & Stock Replenishment Workflows - All Department Workers",
   "private": true,
   "scripts": {
-    "install:all": "npm run install:data && npm run install:commercial && npm run install:finance && npm run install:marketing && npm run install:it",
-    "install:data": "cd data-analysis && npm install",
-    "install:commercial": "cd commercial && npm install",
-    "install:finance": "cd finance && npm install",
-    "install:marketing": "cd marketing && npm install",
-    "install:it": "cd it && npm install",
-    "start:data": "cd data-analysis && npm start",
-    "start:commercial": "cd commercial && npm start",
-    "start:finance": "cd finance && npm start",
-    "start:marketing": "cd marketing && npm start",
-    "start:it": "cd it && npm start",
-    "start:all": "concurrently \"npm:start:data\" \"npm:start:commercial\" \"npm:start:finance\" \"npm:start:marketing\" \"npm:start:it\"",
-    "interactive:data": "cd data-analysis && node worker-interactive.js",
-    "interactive:commercial": "cd commercial && node worker-interactive.js",
-    "interactive:finance": "cd finance && node worker-interactive.js",
-    "interactive:marketing": "cd marketing && node worker-interactive.js",
-    "interactive:it": "cd it && node worker-interactive.js",
-    "deploy": "node scripts/deploy-process.js",
-    "start": "node scripts/start-process.js"
+    "install:all": "npm install && npm run install:esbs && npm run install:uis",
+    "install:esbs": "cd esb1 && npm install && cd ../esb2 && npm install",
+    "install:uis": "cd ui-data-analysis && npm install && cd ../ui-commercial && npm install && cd ../ui-finance && npm install && cd ../ui-marketing && npm install && cd ../ui-it && npm install && cd ../ui-logistics && npm install && cd ../ui-merchandising && npm install",
+    "esb1": "cd esb1 && node index.js",
+    "esb2": "cd esb2 && node index.js",
+    "esbs": "concurrently \"npm:esb1\" \"npm:esb2\"",
+    "ui:data-analysis": "cd ui-data-analysis && node server.js",
+    "ui:commercial": "cd ui-commercial && node server.js",
+    "ui:finance": "cd ui-finance && node server.js",
+    "ui:marketing": "cd ui-marketing && node server.js",
+    "ui:it": "cd ui-it && node server.js",
+    "ui:logistics": "cd ui-logistics && node server.js",
+    "ui:merchandising": "cd ui-merchandising && node server.js",
+    "ui:all": "concurrently \"npm:ui:data-analysis\" \"npm:ui:commercial\" \"npm:ui:finance\" \"npm:ui:marketing\" \"npm:ui:it\" \"npm:ui:logistics\" \"npm:ui:merchandising\"",
+    "start:web": "concurrently \"npm:esbs\" \"npm:ui:all\"",
+    "deploy": "node scripts/deploy-process.js"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
@@ -31,6 +28,11 @@
   "license": "MIT",
   "dependencies": {
     "@camunda8/sdk": "^8.6.0",
-    "dotenv": "^17.2.3"
+    "axios": "^1.6.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "ejs": "^3.1.9",
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2"
   }
 }

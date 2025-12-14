@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= title %> | Product Promotion System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    /* Custom animations */
+    @keyframes slideIn {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    @keyframes slideOut {
+      from { transform: translateX(0); opacity: 1; }
+      to { transform: translateX(100%); opacity: 0; }
+    }
+    @keyframes pulse-border {
+      0%, 100% { border-color: rgba(59, 130, 246, 0.5); }
+      50% { border-color: rgba(59, 130, 246, 1); }
+    }
+    .notification-enter { animation: slideIn 0.3s ease-out forwards; }
+    .notification-exit { animation: slideOut 0.3s ease-in forwards; }
+    .task-new { animation: pulse-border 1s ease-in-out 3; }
+  </style>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'dept-data': '#6366f1',
+            'dept-commercial': '#f59e0b', 
+            'dept-finance': '#10b981',
+            'dept-marketing': '#ec4899',
+            'dept-it': '#3b82f6'
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+  <%- include('partials/header') %>
+  
+  <!-- Notification Container -->
+  <div id="notification-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+  <!-- Main Content -->
+  <main class="container mx-auto px-4 py-6">
+    <%- body %>
+  </main>
+
+  <!-- Socket.io Client Script -->
+  <script>
+    const socket = io();
+    
+    // Notification helper
+    function showNotification(message, type = 'info') {
+      const container = document.getElementById('notification-container');
+      const notification = document.createElement('div');
+      
+      const colors = {
+        success: 'bg-green-500',
+        error: 'bg-red-500',
+        warning: 'bg-yellow-500',
+        info: 'bg-blue-500'
+      };
+      
+      const icons = {
+        success: '✅',
+        error: '❌',
+        warning: '⚠️',
+        info: '📥'
+      };
+      
+      notification.className = `notification-enter ${colors[type]} text-white px-4 py-3 rounded-lg shadow-lg flex items-center space-x-2 min-w-[300px]`;
+      notification.innerHTML = `
+        <span class="text-xl">${icons[type]}</span>
+        <span class="flex-1">${message}</span>
+        <button onclick="this.parentElement.remove()" class="text-white/80 hover:text-white">✕</button>
+      `;
+      
+      container.appendChild(notification);
+      
+      // Auto remove after 5 seconds
+      setTimeout(() => {
+        notification.classList.remove('notification-enter');
+        notification.classList.add('notification-exit');
+        setTimeout(() => notification.remove(), 300);
+      }, 5000);
+    }
+    
+    // Socket event handlers
+    socket.on('connect', () => {
+      console.log('Connected to server');
+    });
+    
+    socket.on('new-task', (task) => {
+      showNotification(`New task received: ${task.jobKey}`, 'info');
+      if (typeof onNewTask === 'function') {
+        onNewTask(task);
+      }
+    });
+    
+    socket.on('task-completed', (task) => {
+      showNotification(`Task completed: ${task.jobKey}`, 'success');
+      if (typeof onTaskCompleted === 'function') {
+        onTaskCompleted(task);
+      }
+    });
+    
+    socket.on('error', (error) => {
+      showNotification(`Error: ${error.message}`, 'error');
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "name": "esb2-commercial-marketing-it",
+  "version": "1.0.0",
+  "description": "ESB2 - Commercial, Marketing & IT Endpoints",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
+  }
+}

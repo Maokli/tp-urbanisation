@@ -1,0 +1,28 @@
+<div id="notification-toast" class="hidden fixed top-4 right-4 z-50 bg-blue-500 text-white px-6 py-4 rounded-lg shadow-xl flex items-center space-x-3">
+  <span class="text-2xl">📥</span>
+  <div>
+    <p class="font-semibold">New Task Received!</p>
+    <p id="notification-message" class="text-sm text-white/90"></p>
+  </div>
+  <button onclick="hideNotification()" class="ml-4 text-white/80 hover:text-white">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+    </svg>
+  </button>
+</div>
+
+<script>
+  function showNotificationToast(message) {
+    const toast = document.getElementById('notification-toast');
+    const messageEl = document.getElementById('notification-message');
+    messageEl.textContent = message;
+    toast.classList.remove('hidden');
+    
+    // Auto hide after 5 seconds
+    setTimeout(hideNotification, 5000);
+  }
+  
+  function hideNotification() {
+    document.getElementById('notification-toast').classList.add('hidden');
+  }
+</script>
